@@ -50,6 +50,45 @@ async function UserRegister(req,res){
 }
 
 async function UserLogin(req,res){
+   
+    const {email, password} = req.body
+
+    if(!email || !password){
+        return res.status(401).json({
+            message : "EMAIL OR PASSWORD IS REQUIRED FOR LOGIN !!"
+        })
+    }
+
+    const isUserExits = await UserModel.findOne({
+        email
+    })
+
+    if(!isUserExits){
+        return res.status(404).json({
+            message : "User Not Found Please Login first"
+        })
+    }
+    const isPasswordRight = await bcrypt.compare(password,isUserExits.password)
+ 
+
+    if(!isPasswordRight){
+        return res.status(401).json({
+            message : "Invalid Password"
+        })
+    }
+
+
+
+
+    const token  = jwt.sign({id : isUserExits._id},process.env.JWT_SECRET)
+
+    res.cookie('token',token)
+
+
+    return res.status(201).json({
+        message : "User Login Sucessfully"
+    })
+
 
 }
 
