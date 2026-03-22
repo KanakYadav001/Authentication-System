@@ -9,4 +9,5 @@ router.get('/get-info',UserAuthController.GetInfo)
 router.get('/get-refresh-token',UserAuthController.GetRefreshToken)
 router.get('/logout',UserAuthController.Logout)
 router.get('/logout-all',UserAuthController.LogoutAll)
+router.get('/verify-email',UserAuthController.VerifyEmail)
 module.exports = router

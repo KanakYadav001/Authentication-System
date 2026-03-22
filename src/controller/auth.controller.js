@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
 const sendEmail = require("../services/mail.service");
 const SessionModel = require("../models/session.model");
+const { GernateOTP, getOthHTML } = require("../utils/util");
+const OTPModel = require("../models/otp.model");
 
 async function UserRegister(req, res) {
   const { username, email, password } = req.body;
@@ -22,7 +24,10 @@ async function UserRegister(req, res) {
       message: "User Already Exits",
     });
   }
-  const hashPassword = await bcrypt.hash(password, 10);
+
+  // Ensure password is a string and trim whitespace
+  const passwordString = String(password).trim();
+  const hashPassword = await bcrypt.hash(passwordString, 10);
 
   const User = await UserModel.create({
     username,
@@ -30,25 +35,32 @@ async function UserRegister(req, res) {
     password: hashPassword,
   });
 
+  const otp = GernateOTP();
+  const html = getOthHTML(otp);
+  const otpString = String(otp).trim();
+  const hashOTP = await bcrypt.hash(otpString, 10);
 
+  const OTP = await OTPModel.create({
+    email,
+    user: User._id,
+    otpHash: hashOTP,
+  });
 
   await sendEmail(
     email,
-    "Welcome To Our App",
-    `Hello ${username},\n\nThank you for registering with our app! We're excited to have you on board.\n\nBest regards,\nThe Team`,
-    `<p>Hello <strong>${username}</strong>,</p><p>Thank you for registering with our app! We're excited to have you on board.</p><p>Best regards,<br>The Team</p>`,
+    "OTP For Email Verification",
+    `Your OTP For Email Verification Is ${otp}`,
+    html,
   );
- 
 
   return res.status(201).json({
     message: "User Registered Successfully",
-    User:{
-        username : User.username,
-        email : User.email,
-        password : User.password,
-        verified : User.verified
-    }
-    
+    User: {
+      username: User.username,
+      email: User.email,
+      password: User.password,
+      verified: User.verified,
+    },
   });
 }
 
@@ -70,6 +82,12 @@ async function UserLogin(req, res) {
       message: "User Not Found Please Login first",
     });
   }
+
+  if (!isUserExits.verified) {
+    return res.status(401).json({
+      message: "Please Verify Your Email First",
+    });
+  }
   const isPasswordRight = await bcrypt.compare(password, isUserExits.password);
 
   if (!isPasswordRight) {
@@ -83,7 +101,6 @@ async function UserLogin(req, res) {
     process.env.JWT_SECRET,
     { expiresIn: "7d" },
   );
-  
 
   const hashRefreshToken = await bcrypt.hash(ReFreshToken, 10);
 
@@ -94,14 +111,11 @@ async function UserLogin(req, res) {
     userAgent: req.headers["user-agent"],
   });
 
-
   const Accesstoken = jwt.sign(
-    { id: isUserExits._id , sessionId : session._id},
+    { id: isUserExits._id, sessionId: session._id },
     process.env.JWT_SECRET,
     { expiresIn: "15m" },
   );
-
-  
 
   res.cookie("token", ReFreshToken, {
     httpOnly: true,
@@ -252,26 +266,59 @@ async function Logout(req, res) {
   }
 }
 
-
 async function LogoutAll(req, res) {
   const token = req.cookies.token;
 
-
-  if(!token){    
+  if (!token) {
     return res.status(401).json({
-        message : "Token Not Found"
-    })
-  } 
+      message: "Token Not Found",
+    });
+  }
 
   const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-  await SessionModel.updateMany({user : decoded.id} , {revoke : true})
-
+  await SessionModel.updateMany({ user: decoded.id }, { revoke: true });
 
   res.status(200).json({
     message: "Logout Successfully",
   });
+}
 
+async function VerifyEmail(req, res) {
+  const { email, otp } = req.body;
+
+  const isOTPExits = await OTPModel.findOne({ email });
+
+  if (!isOTPExits) {
+    return res.status(400).json({
+      message: "OTP Not Found",
+    });
+  }
+
+  const isOTPValid = await bcrypt.compare(otp, isOTPExits.otpHash);
+
+  if (!isOTPValid) {
+    return res.status(400).json({
+      message: "Invalid OTP",
+    });
+  }
+
+  const user = await UserModel.findById(isOTPExits.user);
+
+  if (!user) {
+    return res.status(400).json({
+      message: "User Not Found",
+    });
+  }
+
+  user.verified = true;
+  await user.save();
+
+  await OTPModel.deleteMany({ email });
+
+  res.status(200).json({
+    message: "Email Verified Successfully",
+  });
 }
 
 module.exports = {
@@ -280,5 +327,6 @@ module.exports = {
   GetInfo,
   GetRefreshToken,
   Logout,
- LogoutAll,
+  LogoutAll,
+  VerifyEmail,
 };
