@@ -7,5 +7,6 @@ router.post('/register',UserAuthController.UserRegister)
 router.post('/login',UserAuthController.UserLogin)
 router.get('/get-info',UserAuthController.GetInfo)
 router.get('/get-refresh-token',UserAuthController.GetRefreshToken)
-router.get('/logout',UserAuthController.LogoutAll)
+router.get('/logout',UserAuthController.Logout)
+router.get('/logout-all',UserAuthController.LogoutAll)
 module.exports = router

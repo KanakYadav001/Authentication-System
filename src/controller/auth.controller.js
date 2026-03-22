@@ -1,7 +1,7 @@
 const UserModel = require("../models/user.model");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
-
+const sendEmail = require("../services/mail.service");
 const SessionModel = require("../models/session.model");
 
 async function UserRegister(req, res) {
@@ -29,33 +29,26 @@ async function UserRegister(req, res) {
     email,
     password: hashPassword,
   });
-  const RefreshToken = jwt.sign({ id: User._id }, process.env.JWT_SECRET);
 
-  const hashRefreshToken = await bcrypt.hash(RefreshToken, 10);
 
-  const session = await SessionModel.create({
-    user: User._id,
-    hashRefreshToken: hashRefreshToken,
-    ip: req.ip,
-    userAgent: req.headers["user-agent"],
-  });
 
-  const token = jwt.sign(
-    { id: User._id, sessionId: session._id },
-    process.env.JWT_SECRET,
+  await sendEmail(
+    email,
+    "Welcome To Our App",
+    `Hello ${username},\n\nThank you for registering with our app! We're excited to have you on board.\n\nBest regards,\nThe Team`,
+    `<p>Hello <strong>${username}</strong>,</p><p>Thank you for registering with our app! We're excited to have you on board.</p><p>Best regards,<br>The Team</p>`,
   );
-
-  res.cookie("token", token, {
-    httpOnly: true,
-    secure: false,
-    sameSite: "strict",
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+ 
 
   return res.status(201).json({
     message: "User Registered Successfully",
-    User,
-    token,
+    User:{
+        username : User.username,
+        email : User.email,
+        password : User.password,
+        verified : User.verified
+    }
+    
   });
 }
 
@@ -85,17 +78,30 @@ async function UserLogin(req, res) {
     });
   }
 
-  const Accesstoken = jwt.sign(
-    { id: isUserExits._id },
-    process.env.JWT_SECRET,
-    { expiresIn: "15m" },
-  );
-
   const ReFreshToken = jwt.sign(
     { id: isUserExits._id },
     process.env.JWT_SECRET,
     { expiresIn: "7d" },
   );
+  
+
+  const hashRefreshToken = await bcrypt.hash(ReFreshToken, 10);
+
+  const session = await SessionModel.create({
+    user: isUserExits._id,
+    hashRefreshToken: hashRefreshToken,
+    ip: req.ip,
+    userAgent: req.headers["user-agent"],
+  });
+
+
+  const Accesstoken = jwt.sign(
+    { id: isUserExits._id , sessionId : session._id},
+    process.env.JWT_SECRET,
+    { expiresIn: "15m" },
+  );
+
+  
 
   res.cookie("token", ReFreshToken, {
     httpOnly: true,
@@ -197,7 +203,7 @@ async function GetRefreshToken(req, res) {
   }
 }
 
-async function LogoutAll(req, res) {
+async function Logout(req, res) {
   const token = req.cookies.token;
 
   if (!token) {
@@ -246,10 +252,33 @@ async function LogoutAll(req, res) {
   }
 }
 
+
+async function LogoutAll(req, res) {
+  const token = req.cookies.token;
+
+
+  if(!token){    
+    return res.status(401).json({
+        message : "Token Not Found"
+    })
+  } 
+
+  const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+  await SessionModel.updateMany({user : decoded.id} , {revoke : true})
+
+
+  res.status(200).json({
+    message: "Logout Successfully",
+  });
+
+}
+
 module.exports = {
   UserRegister,
   UserLogin,
   GetInfo,
   GetRefreshToken,
-  LogoutAll,
+  Logout,
+ LogoutAll,
 };

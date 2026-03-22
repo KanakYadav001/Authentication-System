@@ -18,6 +18,10 @@ const UserSchema = new mongo.Schema({
         required : [true,"Password Is Required For Register a User"],
        
     },
+    verified : {
+        type : Boolean,
+        default : false,
+    },
     
      
 })
