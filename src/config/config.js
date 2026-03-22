@@ -1,8 +1,7 @@
 require('dotenv').config()
 
 if(!process.env.MONGO_URL){
-    throw new Error("Enviroment Variables Missing !!! ");
-    
+    throw new Error("Environment Variables Missing !!! ");
 }
 
 
