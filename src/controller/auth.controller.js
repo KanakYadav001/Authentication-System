@@ -36,13 +36,20 @@ async function UserRegister(req,res){
 
     const token  = jwt.sign({id : User._id},process.env.JWT_SECRET)
 
-    res.cookie('token',token)
+    res.cookie('token',token,{
+        httpOnly : true,
+        secure : false,
+        sameSite : "strict",
+        maxAge : 7*24*60*60*1000 
+
+    })
 
 
 
    return res.status(201).json({
         message : "User Login Sucessfully",
-        User
+        User,
+        token
     })
 
 
@@ -80,20 +87,59 @@ async function UserLogin(req,res){
 
 
 
-    const token  = jwt.sign({id : isUserExits._id},process.env.JWT_SECRET)
+    const Accesstoken  = jwt.sign({id : isUserExits._id},process.env.JWT_SECRET,{expiresIn : "15m"})
 
-    res.cookie('token',token)
+    const ReFreshToken = jwt.sign({id : isUserExits._id},process.env.JWT_SECRET,{expiresIn : "7d"})
+
+     res.cookie('token',ReFreshToken,{
+        httpOnly : true,
+        secure : false,
+        sameSite : "strict",
+        maxAge : 7*24*60*60*1000 
+
+    })
 
 
     return res.status(201).json({
-        message : "User Login Sucessfully"
+        message : "User Login Sucessfully",
+        Accesstoken
     })
 
 
 }
 
 
+async function GetInfo(req,res){
+    const token = req.cookies.token
+ console.log(token);
+ 
+    if(!token){
+        return res.status(401).json({
+            message : "Token Not Found"
+        })
+    }
+
+    try{
+  
+         let decoaded   = jwt.verify(token,process.env.JWT_SECRET)
+          
+         let user = await UserModel.findById(decoaded.id)
+
+         res.status(201).json({
+            message : "Data Fetch Sucessfully",
+            user
+         })
+
+    }
+    catch(err){
+       return res.status(401).json({
+        message : "Invalid Token"
+       })
+    }
+}
+
 module.exports={
     UserRegister,
-    UserLogin
+    UserLogin,
+    GetInfo
 }
